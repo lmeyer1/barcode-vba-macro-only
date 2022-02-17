@@ -1505,196 +1505,30 @@ Function qr_gen(ptext As String, poptions As String) As String
   Next i
   ebcnt = 1
   utf8 = 0
-  For i = 1 To Len(ptext) + 1
-    ' Decide how many bytes this character has
-    If i > Len(ptext) Then
-      k = -5 ' End of text --> skip several code sections
-    Else ' need to parse character i of ptext and decide how many bytes it has
-      k = AscL(Mid(ptext, i, 1))
-      If k >= &H1FFFFF Then ' FFFF - 1FFFFFFF
-        m = 4
-        k = -1
-      ElseIf k >= &H7FF Then ' 7FF-FFFF 3 bytes
-        m = 3
-        k = -1
-      ElseIf k >= 128 Then
-        m = 2
-        k = -1
-      Else ' normal 7bit ASCII character, so it is worth it to check if it belong to the Numeric or Alphanumeric subsets defined in ECI (array qralnum)
-        m = 1
-        k = InStr(qralnum, Mid(ptext, i, 1)) - 1
-      End If
+  eb(1, 2) = 1
+  eb(1, 3) = Len(ptext)
+  For i = 1 To Len(ptext)
+    k = AscL(Mid(ptext, i, 1))
+    If k >= &H1FFFFF Then ' FFFF - 1FFFFFFF
+      m = 4
+      k = -1
+    ElseIf k >= &H7FF Then ' 7FF-FFFF 3 bytes
+      m = 3
+      k = -1
+    ElseIf k >= 128 Then
+      m = 2
+      k = -1
+    Else ' normal 7bit ASCII character, so it is worth it to check if it belong to the Numeric or Alphanumeric subsets defined in ECI (array qralnum)
+      m = 1
+      k = InStr(qralnum, Mid(ptext, i, 1)) - 1
     End If
-    ' Depending on k and a lot of other things, increase ebcnt
-    If (k < 0) Then ' Treat mult-byte case or exit? (bude byte nebo konec)
-      If ecx_cnt(1) >= 9 Or (k = -5 And ecx_cnt(1) = ecx_cnt(3)) Then ' Until now it was possible numeric??? (Az dosud bylo mozno pouzitelne numeric)
-        If (ecx_cnt(2) - ecx_cnt(1)) >= 8 Or (ecx_cnt(3) = ecx_cnt(2)) Then ' pred num je i pouzitelny alnum
-          If (ecx_cnt(3) > ecx_cnt(2)) Then ' Jeste pred alnum bylo byte
-            eb(ebcnt, 1) = 3         ' Typ byte
-            eb(ebcnt, 2) = ecx_pos(3) ' Position pozice
-            eb(ebcnt, 3) = ecx_cnt(3) - ecx_cnt(2) ' delka
-            ebcnt = ebcnt + 1
-            ecx_poc(3) = ecx_poc(3) + 1
-          End If
-          eb(ebcnt, 1) = 2         ' Typ alnum
-          eb(ebcnt, 2) = ecx_pos(2) ' starting position where the string to be encoded as alnum starts
-          eb(ebcnt, 3) = ecx_cnt(2) - ecx_cnt(1) ' number of characters to be encoded as alnum (delka)
-          ebcnt = ebcnt + 1
-          ecx_poc(2) = ecx_poc(2) + 1
-          ecx_cnt(2) = 0
-        ElseIf ecx_cnt(3) > ecx_cnt(1) Then ' byly bytes pred numeric
-          eb(ebcnt, 1) = 3         ' Typ byte
-          eb(ebcnt, 2) = ecx_pos(3) ' Position pozice
-          eb(ebcnt, 3) = ecx_cnt(3) - ecx_cnt(1) ' delka
-          ebcnt = ebcnt + 1
-          ecx_poc(3) = ecx_poc(3) + 1
-        End If
-      ElseIf (ecx_cnt(2) >= 8) Or (k = -5 And ecx_cnt(2) = ecx_cnt(3)) Then ' Az dosud bylo mozno pouzitelne alnum
-        If (ecx_cnt(3) > ecx_cnt(2)) Then ' Jeste pred alnum bylo byte
-          eb(ebcnt, 1) = 3         ' Typ byte
-          eb(ebcnt, 2) = ecx_pos(3) ' Position pozice
-          eb(ebcnt, 3) = ecx_cnt(3) - ecx_cnt(2) ' delka
-          ebcnt = ebcnt + 1
-          ecx_poc(3) = ecx_poc(3) + 1
-        End If
-        eb(ebcnt, 1) = 2         ' Typ alnum
-        eb(ebcnt, 2) = ecx_pos(2)
-        eb(ebcnt, 3) = ecx_cnt(2) ' delka
-        ebcnt = ebcnt + 1
-        ecx_poc(2) = ecx_poc(2) + 1
-        ecx_cnt(3) = 0
-        ecx_cnt(2) = 0 ' vse zpracovano
-      ElseIf (k = -5 And ecx_cnt(3) > 0) Then ' konec ale mam co ulozit
-        eb(ebcnt, 1) = 3         ' Typ byte
-        eb(ebcnt, 2) = ecx_pos(3) ' Position pozice
-        eb(ebcnt, 3) = ecx_cnt(3) ' delka
-        ebcnt = ebcnt + 1
-        ecx_poc(3) = ecx_poc(3) + 1
-      End If
+    eb(1, 4) = eb(1, 4) + m
+    If k < 0 Then
+      eb(1, 1) = 3
+    ElseIf eb(1, 1) <= 1 Then
+      if k >= 10 Then eb(1, 1) = 2 Else eb(1, 1) = 1
     End If
-    If k = -5 Then Exit For
-    If (k >= 0) Then ' We can alphanumeric? (Muzeme alnum)
-      If (k >= 10 And ecx_cnt(1) >= 12) Then ' Until now it was perhaps numeric (Az dosud bylo mozno num)
-        If (ecx_cnt(2) - ecx_cnt(1)) >= 8 Or (ecx_cnt(3) = ecx_cnt(2)) Then ' There is also an alphanumeric which is worth it(Je tam i alnum ktery stoji za to)
-          If (ecx_cnt(3) > ecx_cnt(2)) Then ' Even before it was alnum byte (Jeste pred alnum bylo byte)
-            eb(ebcnt, 1) = 3         ' Typ byte
-            eb(ebcnt, 2) = ecx_pos(3) ' Position (pozice)
-            eb(ebcnt, 3) = ecx_cnt(3) - ecx_cnt(2) ' length (delka)
-            ebcnt = ebcnt + 1
-            ecx_poc(3) = ecx_poc(3) + 1
-          End If
-          eb(ebcnt, 1) = 2         ' Typ alnum
-          eb(ebcnt, 2) = ecx_pos(2)
-          eb(ebcnt, 3) = ecx_cnt(2) - ecx_cnt(1) ' length (delka)
-          ebcnt = ebcnt + 1
-          ecx_poc(2) = ecx_poc(2) + 1
-          ecx_cnt(2) = 0 ' processed everything (vse zpracovano)
-        ElseIf (ecx_cnt(3) > ecx_cnt(1)) Then ' Previous Num is byte (Pred Num je byte)
-          eb(ebcnt, 1) = 3         ' Typ byte
-          eb(ebcnt, 2) = ecx_pos(3) ' Position (pozice)
-          eb(ebcnt, 3) = ecx_cnt(3) - ecx_cnt(1) ' length (delka)
-          ebcnt = ebcnt + 1
-          ecx_poc(3) = ecx_poc(3) + 1
-        End If
-        eb(ebcnt, 1) = 1         ' Typ numerix
-        eb(ebcnt, 2) = ecx_pos(1)
-        eb(ebcnt, 3) = ecx_cnt(1) ' length (delka)
-        ebcnt = ebcnt + 1
-        ecx_poc(1) = ecx_poc(1) + 1
-        ecx_cnt(1) = 0
-        ecx_cnt(2) = 0
-        ecx_cnt(3) = 0 ' processed everything (vse zpracovano)
-      End If
-      If ecx_cnt(2) = 0 Then ecx_pos(2) = i
-      ecx_cnt(2) = ecx_cnt(2) + 1
-    Else ' possible alnum (mozno alnum)
-      ecx_cnt(2) = 0
-    End If
-    If k >= 0 And k < 10 Then ' Can be numeric (muze byt numeric)
-      If ecx_cnt(1) = 0 Then ecx_pos(1) = i
-      ecx_cnt(1) = ecx_cnt(1) + 1
-    Else
-      ecx_cnt(1) = 0
-    End If
-    If ecx_cnt(3) = 0 Then ecx_pos(3) = i
-    ecx_cnt(3) = ecx_cnt(3) + m
-    utf8 = utf8 + m
-    If ebcnt >= 16 Then ' We have already taken 3 other blocks of bits (Uz by se mi tri dalsi bloky stejne nevesli)
-      ecx_cnt(1) = 0
-      ecx_cnt(2) = 0
-    End If
-    'Debug.Print "Character:'" & Mid(ptext, i, 1) & "'(" & k & _
-        ") ebn=" & ecx_pos(1) & "." & ecx_cnt(1) & _
-         " eba=" & ecx_pos(2) & "." & ecx_cnt(2) & _
-         " ebb=" & ecx_pos(3) & "." & ecx_cnt(3)
-  Next
-  ebcnt = ebcnt - 1
-  ' **** Since the code above is known to be buggy, but difficult
-  ' **** to understand, add a "safety net" here doing some
-  ' **** plausibility checks and trying to fix known error that
-  ' **** might have been made above
-  ' **1) Check that eb() rows cover the full string (i.e. last eb row is not missing)
-  If (eb(ebcnt, 2) + eb(ebcnt, 3) < (Len(ptext) + 1)) Then
-    ' oops, eb() does not cover full text. Lets hope the code above just forgot to add the last row
-    If (ecx_pos(1) = eb(ebcnt, 2) + eb(ebcnt, 3)) Then ' This is a quick fix. Not well tested.
-        current_mode = 1
-    Else
-        If (ecx_pos(2) = eb(ebcnt, 2) + eb(ebcnt, 3)) Then ' This is only a guess. Not tested at all. Sorry ;-)
-            current_mode = 2
-        Else
-            current_mode = 3
-        End If
-    End If
-    ebcnt = ebcnt + 1
-    eb(ebcnt, 1) = current_mode
-    eb(ebcnt, 2) = ecx_pos(current_mode)
-    eb(ebcnt, 3) = ecx_cnt(current_mode)
-    ecx_poc(current_mode) = ecx_poc(current_mode) + 1
-  End If
-  ' **2) Check that eb() rows are non-overlapping
-  For j = 1 To ebcnt
-
-     Debug.Print (j & ". (" & Mid("NAB", eb(j, 1), 1) & "): '" & Replace(Mid(ptext, eb(j, 2), eb(j, 3)), Chr(10), "\n") & "'")
-  Next j
-  i = 1
-  While i < (ebcnt - 1)
-    If eb(i, 2) + eb(i, 3) <> eb(i + 1, 2) Then
-        ' oops, this should not happen. First document it:
-        Debug.Print ("eb() rows " & i & " and " & i + 1 & " are overlapping:")
-        For j = 1 To ebcnt
-            If i = j Then
-                Debug.Print (eb(j, 1) & ": " & eb(j, 2) & " ... " & eb(j, 2) + eb(j, 3)) & " :-("
-            Else
-                Debug.Print (eb(j, 1) & ": " & eb(j, 2) & " ... " & eb(j, 2) + eb(j, 3))
-            End If
-        Next j
-        ' Now Lets see if we can fix it:
-        wasfixed = False
-        For k = i To 1 Step -1
-            If eb(k, 2) = eb(i + 1, 2) Then
-                ' okay, the row k to i seem to be contained in i+1 and following. Delete k to i ...
-                For j = k To ebcnt - (i - k + 1) ' ... by copying upwards all later rows...
-                    eb(j, 1) = eb(j + (i - k + 1), 1)
-                    eb(j, 2) = eb(j + (i - k + 1), 2)
-                    eb(j, 3) = eb(j + (i - k + 1), 3)
-                    eb(j, 4) = eb(j + (i - k + 1), 4)
-                Next j
-                ebcnt = ebcnt - (i - k + 1) ' and correcting the total rowcount
-                wasfixed = True
-                Debug.Print ("... this should be fixed now::")
-                For j = 1 To ebcnt
-                    Debug.Print (j & ". (" & eb(j, 1) & "): " & eb(j, 2) & " ... " & eb(j, 2) + eb(j, 3))
-                Next j
-                Exit For
-            End If
-        Next k
-        If Not (wasfixed) Then
-            MsgBox ("The input text analysis failed - entering debug mode...")
-        End If
-    End If
-    i = i + 1
-  Wend
-  'Debug.Print ("ebcnt=" & ebcnt) ' ebcnt now has its final value
+  Next i
   ' Calculate how many bits the message has in total?
   c = 0
   For i = 1 To ebcnt
